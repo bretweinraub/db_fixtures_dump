@@ -26,29 +26,33 @@ namespace :db do
 
       models.each do |m|
         next if excludes.include?(m)
+        
+        begin
+          model = m.constantize
+          next unless model.ancestors.include?(ActiveRecord::Base)
 
-        model = m.constantize
-        next unless model.ancestors.include?(ActiveRecord::Base)
+          entries = model.unscoped.all
+          puts "Dumping model: #{m} (#{entries.length} entries)"
 
-        entries = model.unscoped.all.order('id ASC')
-        puts "Dumping model: #{m} (#{entries.length} entries)"
+          increment = 1
 
-        increment = 1
+          # use test/fixtures if you do test:unit
+          model_file = File.join(Rails.root, dump_dir, m.underscore.pluralize + '.yml')
+          output = {}
+          entries.each do |a|
+            attrs = a.attributes
+            attrs.delete_if{|k,v| v.nil?}
 
-        # use test/fixtures if you do test:unit
-        model_file = File.join(Rails.root, dump_dir, m.underscore.pluralize + '.yml')
-        output = {}
-        entries.each do |a|
-          attrs = a.attributes
-          attrs.delete_if{|k,v| v.nil?}
+            output["#{m}_#{increment}"] = attrs
 
-          output["#{m}_#{increment}"] = attrs
-
-          increment += 1
+            increment += 1
+          end
+          file = File.open(model_file, 'w')
+          file << output.to_yaml
+          file.close #better than relying on gc
+        rescue Exception => e
+          puts "Skipping #{model} , something went wrong: #{e.to_s}"
         end
-        file = File.open(model_file, 'w')
-        file << output.to_yaml
-        file.close #better than relying on gc
       end
     end
   end
